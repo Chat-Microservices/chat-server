@@ -34,4 +34,4 @@ generate-chat-server-api:
 		api/chat-server_v1/chat-server.proto
 
 build:
-	GOOS=linux GOARCH=amd64 go build -o service_chat_server cmd/server/main.go
+	GOOS=linux GOARCH=amd64 go build -o chat_server cmd/server/main.go

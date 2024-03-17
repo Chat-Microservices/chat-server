@@ -47,4 +47,4 @@ services:
     networks:
       - chat-server-network
     ports:
-      - "${GRPC_PORT}:50051"
+      - "${GRPC_PORT_EXTERNAL}:${GRPC_PORT}"
