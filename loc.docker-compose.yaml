@@ -1,0 +1,50 @@
+version: '3.7'
+
+volumes:
+  pg_vol_chat_server:
+
+networks:
+  chat-server-network:
+    driver: bridge
+
+services:
+  pg-chat-server:
+    image: postgres:16-alpine
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_USER=${PG_USER}
+      - POSTGRES_PASSWORD=${PG_PASSWORD}
+      - POSTGRES_DB=${PG_DATABASE_NAME}
+    ports:
+      - "${PG_PORT}:5432"
+    volumes:
+      - pg_vol_chat_server:/var/lib/postgresql/chat_server_data
+    networks:
+      - chat-server-network
+
+  migrator:
+    build:
+      context: .
+      dockerfile: migration.Dockerfile
+    restart: on-failure
+    depends_on:
+      - pg-chat-server
+    networks:
+      - chat-server-network
+
+  chat-server:
+    container_name: chat-server
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: [ "./entrypoint.sh" ]
+    volumes:
+      - ${BASE_DIR}.env:/root/.env
+    depends_on:
+      - pg-chat-server
+      - migrator
+    networks:
+      - chat-server-network
+    ports:
+      - "${GRPC_PORT}:50051"
