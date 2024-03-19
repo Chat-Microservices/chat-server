@@ -142,7 +142,7 @@ func (s *server) DeleteChat(ctx context.Context, req *desc.DeleteRequest) (*empt
 	if req.GetId() == 0 {
 		return nil, status.Error(codes.InvalidArgument, "Invalid request: Id must be provided")
 	}
-
+	log.Printf("delete chat by id: %d", req.GetId())
 	exists, err := s.chatExists(ctx, req.GetId())
 	if err != nil {
 		return nil, checkError("Error checking chat existence", err)
@@ -150,8 +150,6 @@ func (s *server) DeleteChat(ctx context.Context, req *desc.DeleteRequest) (*empt
 	if !exists {
 		return nil, status.Error(codes.NotFound, "Chat not found")
 	}
-
-	log.Printf("delete chat by id: %d", req.GetId())
 
 	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{
 		IsoLevel:       pgx.ReadCommitted,
