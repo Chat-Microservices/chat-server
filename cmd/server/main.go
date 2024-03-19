@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"flag"
+	sq "github.com/Masterminds/squirrel"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/semho/chat-microservices/chat-server/internal/config"
@@ -37,7 +39,7 @@ func checkError(msg string, err error) error {
 
 func (s *server) userExists(ctx context.Context, userName string) (bool, error) {
 	var exists bool
-	err := s.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM "chat-server".public.users  WHERE name = $1)`,
+	err := s.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM "users"  WHERE name = $1)`,
 		userName).Scan(&exists)
 	if err != nil {
 		return false, err
@@ -47,7 +49,7 @@ func (s *server) userExists(ctx context.Context, userName string) (bool, error) 
 
 func (s *server) chatExists(ctx context.Context, chatID int64) (bool, error) {
 	var exists bool
-	err := s.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM "chat-server".public.chats  WHERE id = $1)`,
+	err := s.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM "chats"  WHERE id = $1)`,
 		chatID).Scan(&exists)
 	if err != nil {
 		return false, err
@@ -71,6 +73,9 @@ func (s *server) CreateChat(ctx context.Context, req *desc.CreateChatRequest) (*
 	}
 	defer tx.Rollback(ctx)
 
+	selectUserBuilder := sq.Select("id").From("users").PlaceholderFormat(sq.Dollar)
+	insertUserBuilder := sq.Insert("users").PlaceholderFormat(sq.Dollar).Columns("name").Suffix("RETURNING id")
+	insertUserChatBuilder := sq.Insert("user_chat").PlaceholderFormat(sq.Dollar).Columns("user_id", "chat_id")
 	usersID := make([]int64, len(req.GetUsernames()))
 	for i, user := range req.GetUsernames() {
 		exists, err := s.userExists(ctx, user.GetName())
@@ -78,14 +83,21 @@ func (s *server) CreateChat(ctx context.Context, req *desc.CreateChatRequest) (*
 			return nil, checkError("Error checking user existence", err)
 		}
 		if exists {
-			err = tx.QueryRow(ctx, `SELECT id FROM "chat-server".public.users WHERE name = $1`,
-				user.GetName()).Scan(&usersID[i])
+			query, args, err := selectUserBuilder.Where(sq.Eq{"name": user.GetName()}).ToSql()
+			if err != nil {
+				return nil, checkError("Failed to build query", err)
+			}
+			err = tx.QueryRow(ctx, query, args...).Scan(&usersID[i])
 			if err != nil {
 				return nil, checkError("Failed to select user from the database", err)
 			}
 		} else {
-			err = tx.QueryRow(ctx, `INSERT INTO "chat-server".public.users (name) VALUES ($1) RETURNING id`,
-				user.GetName()).Scan(&usersID[i])
+			query, args, err := insertUserBuilder.Values(user.GetName()).ToSql()
+			if err != nil {
+				return nil, checkError("Failed to build query", err)
+			}
+
+			err = tx.QueryRow(ctx, query, args...).Scan(&usersID[i])
 			if err != nil {
 				return nil, checkError("Failed to insert user into the database", err)
 			}
@@ -93,14 +105,17 @@ func (s *server) CreateChat(ctx context.Context, req *desc.CreateChatRequest) (*
 	}
 
 	var chatID int64
-	err = tx.QueryRow(ctx, `INSERT INTO "chat-server".public.chats DEFAULT VALUES RETURNING id`).Scan(&chatID)
+	err = tx.QueryRow(ctx, `INSERT INTO chats DEFAULT VALUES RETURNING id`).Scan(&chatID)
 	if err != nil {
 		return nil, checkError("failed to create chat the database", err)
 	}
 
 	for _, userID := range usersID {
-		_, err = tx.Exec(ctx, `INSERT INTO "chat-server".public.user_chat (user_id, chat_id) VALUES ($1, $2)`,
-			userID, chatID)
+		query, args, err := insertUserChatBuilder.Values(userID, chatID).ToSql()
+		if err != nil {
+			return nil, checkError("Failed to build query", err)
+		}
+		_, err = tx.Exec(ctx, query, args...)
 		if err != nil {
 			return nil, checkError("failed to insert userID and chatID into the database", err)
 		}
@@ -148,17 +163,32 @@ func (s *server) DeleteChat(ctx context.Context, req *desc.DeleteRequest) (*empt
 	}
 	defer tx.Rollback(ctx)
 
-	_, err = tx.Exec(ctx, `DELETE FROM "chat-server".public.user_chat WHERE chat_id = $1`, req.GetId())
+	deleteUserChatBuilder := sq.Delete("user_chat").PlaceholderFormat(sq.Dollar).Where(sq.Eq{"chat_id": req.GetId()})
+	deleteMessagesBuilder := sq.Delete("messages").PlaceholderFormat(sq.Dollar).Where(sq.Eq{"chat_id": req.GetId()})
+	deleteChatBuilder := sq.Delete("chats").PlaceholderFormat(sq.Dollar).Where(sq.Eq{"id": req.GetId()})
+	sqlUserChat, argsUserChat, err := deleteUserChatBuilder.ToSql()
+	if err != nil {
+		return nil, checkError("Failed to generate SQL for deleting user_chat records", err)
+	}
+	sqlMessages, argsMessages, err := deleteMessagesBuilder.ToSql()
+	if err != nil {
+		return nil, checkError("Failed to generate SQL for deleting messages records", err)
+	}
+	sqlChat, argsChat, err := deleteChatBuilder.ToSql()
+	if err != nil {
+		return nil, checkError("Failed to generate SQL for deleting chat", err)
+	}
+	_, err = tx.Exec(ctx, sqlUserChat, argsUserChat...)
 	if err != nil {
 		return nil, checkError("failed to delete user_chat records from the database", err)
 	}
 
-	_, err = tx.Exec(ctx, `DELETE FROM "chat-server".public.messages WHERE chat_id = $1`, req.GetId())
+	_, err = tx.Exec(ctx, sqlMessages, argsMessages...)
 	if err != nil {
 		return nil, checkError("failed to delete user_chat records from the database", err)
 	}
 
-	_, err = tx.Exec(ctx, `DELETE FROM "chat-server".public.chats WHERE id = $1`, req.GetId())
+	_, err = tx.Exec(ctx, sqlChat, argsChat...)
 	if err != nil {
 		return nil, checkError("failed to delete chat the database", err)
 	}
@@ -183,28 +213,57 @@ func (s *server) SendMessage(ctx context.Context, req *desc.SendMessageRequest) 
 		return nil, checkError("Error starting transaction", err)
 	}
 	defer tx.Rollback(ctx)
-	var userID int64
-	err = tx.QueryRow(ctx, `SELECT DISTINCT id FROM "chat-server".public.users WHERE name = $1`,
-		req.GetFrom()).Scan(&userID)
+
+	selectUserIDQuery, selectUserIDArgs, err := sq.
+		Select("id").
+		From("users").
+		Where(sq.Eq{"name": req.GetFrom()}).
+		PlaceholderFormat(sq.Dollar).
+		ToSql()
 	if err != nil {
+		return nil, checkError("Failed to build select user query", err)
+	}
+
+	var userID int64
+	err = tx.QueryRow(ctx, selectUserIDQuery, selectUserIDArgs...).Scan(&userID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, status.Error(codes.NotFound, "User not found")
+		}
 		return nil, checkError("Failed to select user from the database", err)
 	}
-	if userID == 0 {
-		return nil, status.Error(codes.NotFound, "User not found")
+
+	selectChatIDQuery, selectChatIDArgs, err := sq.
+		Select("DISTINCT chat_id").
+		From("user_chat").
+		Where(sq.Eq{"user_id": userID}).
+		PlaceholderFormat(sq.Dollar).
+		ToSql()
+	if err != nil {
+		return nil, checkError("Failed to build select chatID query", err)
 	}
 
 	var chatID int64
-	err = tx.QueryRow(ctx, `SELECT DISTINCT chat_id FROM "chat-server".public.user_chat WHERE user_id = $1`,
-		userID).Scan(&chatID)
+	err = tx.QueryRow(ctx, selectChatIDQuery, selectChatIDArgs...).Scan(&chatID)
 	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, status.Error(codes.NotFound, "Chat not found")
+		}
 		return nil, checkError("Failed to select chatID from the database", err)
 	}
-	if chatID == 0 {
-		return nil, status.Error(codes.NotFound, "Chat not found")
-	}
+
 	log.Printf("UserID: %d, ChatID: %d", userID, chatID)
-	_, err = tx.Exec(ctx, `INSERT INTO "chat-server".public.messages (user_id, chat_id, text) VALUES ($1, $2, $3)`,
-		userID, chatID, req.GetText())
+
+	insertMessageQuery, insertMessageArgs, err := sq.Insert("messages").
+		PlaceholderFormat(sq.Dollar).
+		Columns("user_id", "chat_id", "text").
+		Values(userID, chatID, req.GetText()).
+		ToSql()
+	if err != nil {
+		return nil, checkError("Failed to build insert message query", err)
+	}
+
+	_, err = tx.Exec(ctx, insertMessageQuery, insertMessageArgs...)
 	if err != nil {
 		return nil, checkError("failed to create message in the database", err)
 	}
