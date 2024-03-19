@@ -57,7 +57,7 @@ jobs:
           password: ${{ secrets.SSH_PASSWORD }}
           key: ${{ secrets.SSH_KEY }}
           port: 22
-          source: "./migration.Dockerfile, migrations, ./docker-compose.yaml, ./migration.sh"
+          source: "./docker-compose.yaml"
           target: "/root/chat-server/"
       - name: Deploy to Selectel Cloud via SSH action
         uses: appleboy/ssh-action@v1.0.0
