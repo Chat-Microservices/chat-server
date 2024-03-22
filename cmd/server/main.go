@@ -199,9 +199,22 @@ func (s *server) DeleteChat(ctx context.Context, req *desc.DeleteRequest) (*empt
 }
 
 func (s *server) SendMessage(ctx context.Context, req *desc.SendMessageRequest) (*emptypb.Empty, error) {
+	if req.GetId() == 0 {
+		return nil, status.Error(codes.InvalidArgument, "Invalid request: Id must be provided")
+	}
+
 	if req.GetFrom() == "" || req.GetText() == "" {
 		return nil, status.Error(codes.InvalidArgument, "Invalid request: From or Text must be provided")
 	}
+
+	exists, err := s.chatExists(ctx, req.GetId())
+	if err != nil {
+		return nil, checkError("Error checking chat existence", err)
+	}
+	if !exists {
+		return nil, status.Error(codes.NotFound, "Chat not found")
+	}
+
 	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{
 		IsoLevel:       pgx.ReadCommitted,
 		AccessMode:     pgx.ReadWrite,
@@ -231,31 +244,31 @@ func (s *server) SendMessage(ctx context.Context, req *desc.SendMessageRequest) 
 		return nil, checkError("Failed to select user from the database", err)
 	}
 
-	selectChatIDQuery, selectChatIDArgs, err := sq.
-		Select("DISTINCT chat_id").
-		From("user_chat").
-		Where(sq.Eq{"user_id": userID}).
-		PlaceholderFormat(sq.Dollar).
-		ToSql()
-	if err != nil {
-		return nil, checkError("Failed to build select chatID query", err)
-	}
+	//selectChatIDQuery, selectChatIDArgs, err := sq.
+	//	Select("DISTINCT chat_id").
+	//	From("user_chat").
+	//	Where(sq.Eq{"user_id": userID}).
+	//	PlaceholderFormat(sq.Dollar).
+	//	ToSql()
+	//if err != nil {
+	//	return nil, checkError("Failed to build select chatID query", err)
+	//}
 
-	var chatID int64
-	err = tx.QueryRow(ctx, selectChatIDQuery, selectChatIDArgs...).Scan(&chatID)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, status.Error(codes.NotFound, "Chat not found")
-		}
-		return nil, checkError("Failed to select chatID from the database", err)
-	}
+	//var chatID int64
+	//err = tx.QueryRow(ctx, selectChatIDQuery, selectChatIDArgs...).Scan(&chatID)
+	//if err != nil {
+	//	if err == sql.ErrNoRows {
+	//		return nil, status.Error(codes.NotFound, "Chat not found")
+	//	}
+	//	return nil, checkError("Failed to select chatID from the database", err)
+	//}
 
-	log.Printf("UserID: %d, ChatID: %d", userID, chatID)
+	log.Printf("UserID: %d, ChatID: %d", userID, req.GetId())
 
 	insertMessageQuery, insertMessageArgs, err := sq.Insert("messages").
 		PlaceholderFormat(sq.Dollar).
 		Columns("user_id", "chat_id", "text").
-		Values(userID, chatID, req.GetText()).
+		Values(userID, req.GetId(), req.GetText()).
 		ToSql()
 	if err != nil {
 		return nil, checkError("Failed to build insert message query", err)
