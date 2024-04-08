@@ -26,6 +26,7 @@ type ChatServerV1Client interface {
 	CreateChat(ctx context.Context, in *CreateChatRequest, opts ...grpc.CallOption) (*CreateChatResponse, error)
 	DeleteChat(ctx context.Context, in *DeleteRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	SendMessage(ctx context.Context, in *SendMessageRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	GetListLogs(ctx context.Context, in *GetListLogsRequest, opts ...grpc.CallOption) (*LogsResponse, error)
 }
 
 type chatServerV1Client struct {
@@ -63,6 +64,15 @@ func (c *chatServerV1Client) SendMessage(ctx context.Context, in *SendMessageReq
 	return out, nil
 }
 
+func (c *chatServerV1Client) GetListLogs(ctx context.Context, in *GetListLogsRequest, opts ...grpc.CallOption) (*LogsResponse, error) {
+	out := new(LogsResponse)
+	err := c.cc.Invoke(ctx, "/chat_server_v1.ChatServerV1/GetListLogs", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ChatServerV1Server is the server API for ChatServerV1 service.
 // All implementations must embed UnimplementedChatServerV1Server
 // for forward compatibility
@@ -70,6 +80,7 @@ type ChatServerV1Server interface {
 	CreateChat(context.Context, *CreateChatRequest) (*CreateChatResponse, error)
 	DeleteChat(context.Context, *DeleteRequest) (*emptypb.Empty, error)
 	SendMessage(context.Context, *SendMessageRequest) (*emptypb.Empty, error)
+	GetListLogs(context.Context, *GetListLogsRequest) (*LogsResponse, error)
 	mustEmbedUnimplementedChatServerV1Server()
 }
 
@@ -85,6 +96,9 @@ func (UnimplementedChatServerV1Server) DeleteChat(context.Context, *DeleteReques
 }
 func (UnimplementedChatServerV1Server) SendMessage(context.Context, *SendMessageRequest) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SendMessage not implemented")
+}
+func (UnimplementedChatServerV1Server) GetListLogs(context.Context, *GetListLogsRequest) (*LogsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetListLogs not implemented")
 }
 func (UnimplementedChatServerV1Server) mustEmbedUnimplementedChatServerV1Server() {}
 
@@ -153,6 +167,24 @@ func _ChatServerV1_SendMessage_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ChatServerV1_GetListLogs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetListLogsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ChatServerV1Server).GetListLogs(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/chat_server_v1.ChatServerV1/GetListLogs",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ChatServerV1Server).GetListLogs(ctx, req.(*GetListLogsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ChatServerV1_ServiceDesc is the grpc.ServiceDesc for ChatServerV1 service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -171,6 +203,10 @@ var ChatServerV1_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SendMessage",
 			Handler:    _ChatServerV1_SendMessage_Handler,
+		},
+		{
+			MethodName: "GetListLogs",
+			Handler:    _ChatServerV1_GetListLogs_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
