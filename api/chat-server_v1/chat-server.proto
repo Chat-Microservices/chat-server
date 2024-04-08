@@ -11,6 +11,25 @@ service ChatServerV1 {
   rpc CreateChat(CreateChatRequest) returns (CreateChatResponse);
   rpc DeleteChat(DeleteRequest) returns (google.protobuf.Empty);
   rpc SendMessage(SendMessageRequest) returns (google.protobuf.Empty);
+  rpc GetListLogs(GetListLogsRequest) returns (LogsResponse);
+}
+
+message GetListLogsRequest {
+  uint64 page_number = 1;
+  uint64 page_size = 2;
+}
+
+message LogsResponse {
+  repeated Log logs = 1;
+}
+
+message Log {
+  int64 id = 1;
+  string action = 2;
+  int64 entity_id = 3;
+  string query = 4;
+  google.protobuf.Timestamp created_at = 5;
+  google.protobuf.Timestamp updated_at = 6;
 }
 
 message User {
