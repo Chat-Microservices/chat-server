@@ -12,43 +12,45 @@ func (s *serv) CreateChat(ctx context.Context, users []*model.User) (int64, erro
 	var chatID int64
 	var arrQuery []db.Query
 	var q db.Query
-	err := s.txManager.ReadCommitted(ctx, func(ctx context.Context) error {
-		var errTx error
-		var usersID []int64
-		usersID, arrQuery, errTx = s.chatServerRepository.GetOfCreateUsers(ctx, users)
-		if errTx != nil {
-			return errTx
-		}
-
-		for index, id := range usersID {
-			errTx = s.chatServerRepository.CreateLog(ctx, converter.ToChatServerLogFromQuery(arrQuery[index], id))
+	err := s.txManager.ReadCommitted(
+		ctx, func(ctx context.Context) error {
+			var errTx error
+			var usersID []int64
+			usersID, arrQuery, errTx = s.chatServerRepository.GetOfCreateUsers(ctx, users)
 			if errTx != nil {
 				return errTx
 			}
-		}
 
-		chatID, q, errTx = s.chatServerRepository.CreateChat(ctx)
-		if errTx != nil {
-			return errTx
-		}
-		errTx = s.chatServerRepository.CreateLog(ctx, converter.ToChatServerLogFromQuery(q, chatID))
-		if errTx != nil {
-			return errTx
-		}
+			for index, id := range usersID {
+				errTx = s.chatServerRepository.CreateLog(ctx, converter.ToChatServerLogFromQuery(arrQuery[index], id))
+				if errTx != nil {
+					return errTx
+				}
+			}
 
-		arrQuery, errTx = s.chatServerRepository.BindUserToChat(ctx, usersID, chatID)
-		if errTx != nil {
-			return errTx
-		}
-		for index, id := range usersID {
-			errTx = s.chatServerRepository.CreateLog(ctx, converter.ToChatServerLogFromQuery(arrQuery[index], id))
+			chatID, q, errTx = s.chatServerRepository.CreateChat(ctx)
 			if errTx != nil {
 				return errTx
 			}
-		}
+			errTx = s.chatServerRepository.CreateLog(ctx, converter.ToChatServerLogFromQuery(q, chatID))
+			if errTx != nil {
+				return errTx
+			}
 
-		return nil
-	})
+			arrQuery, errTx = s.chatServerRepository.BindUserToChat(ctx, usersID, chatID)
+			if errTx != nil {
+				return errTx
+			}
+			for index, id := range usersID {
+				errTx = s.chatServerRepository.CreateLog(ctx, converter.ToChatServerLogFromQuery(arrQuery[index], id))
+				if errTx != nil {
+					return errTx
+				}
+			}
+
+			return nil
+		},
+	)
 
 	if err != nil {
 		return 0, err
