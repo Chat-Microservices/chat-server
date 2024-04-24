@@ -1,6 +1,6 @@
 module github.com/semho/chat-microservices/chat-server
 
-go 1.22
+go 1.20
 
 require (
 	github.com/Masterminds/squirrel v1.5.4
