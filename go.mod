@@ -2,8 +2,6 @@ module github.com/semho/chat-microservices/chat-server
 
 go 1.22
 
-toolchain go1.22.0
-
 require (
 	github.com/Masterminds/squirrel v1.5.4
 	github.com/brianvoe/gofakeit v3.18.0+incompatible
