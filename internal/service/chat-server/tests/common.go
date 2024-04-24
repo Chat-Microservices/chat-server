@@ -2,7 +2,7 @@ package tests
 
 import (
 	"context"
-	"github.com/semho/chat-microservices/auth/internal/client/db"
+	"github.com/semho/chat-microservices/chat-server/internal/client/db"
 )
 
 type mockTxManager struct{}
