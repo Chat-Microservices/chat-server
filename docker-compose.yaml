@@ -19,7 +19,7 @@ services:
     ports:
       - "${PG_PORT}:5432"
     volumes:
-      - pg_vol_chat_server:/var/lib/postgresql/chat_server_data
+      - pg_vol_chat_server:/var/lib/postgresql/data
     networks:
       - chat-server-network
 
