@@ -23,6 +23,7 @@ local-migration-create:
 
 generate:
 	make generate-chat-server-api
+	make generate-access-api
 
 generate-chat-server-api:
 	mkdir -p pkg/chat-server_v1
@@ -32,6 +33,15 @@ generate-chat-server-api:
 		--go-grpc_out=pkg/chat-server_v1 --go-grpc_opt=paths=source_relative \
 		--plugin=protoc-gen-go-grpc=./bin/protoc-gen-go-grpc \
 		api/chat-server_v1/chat-server.proto
+
+generate-access-api:
+	mkdir -p pkg/access_v1
+	protoc --proto_path api/access_v1 \
+		--go_out=pkg/access_v1 --go_opt=paths=source_relative \
+		--plugin=protoc-gen-go=./bin/protoc-gen-go \
+		--go-grpc_out=pkg/access_v1 --go-grpc_opt=paths=source_relative \
+		--plugin=protoc-gen-go-grpc=./bin/protoc-gen-go-grpc \
+		api/access_v1/access.proto
 
 build:
 	GOOS=linux GOARCH=amd64 go build -o chat_server cmd/server/main.go

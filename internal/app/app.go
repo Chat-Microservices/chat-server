@@ -3,19 +3,27 @@ package app
 import (
 	"context"
 	"flag"
+	"fmt"
 	"github.com/semho/chat-microservices/chat-server/internal/closer"
 	"github.com/semho/chat-microservices/chat-server/internal/config"
+	"github.com/semho/chat-microservices/chat-server/internal/interceptor"
+	accessV1 "github.com/semho/chat-microservices/chat-server/pkg/access_v1"
 	desc "github.com/semho/chat-microservices/chat-server/pkg/chat-server_v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
 	"log"
 	"net"
+	"net/http"
+	_ "net/http/pprof"
+	"sync"
 )
 
 type App struct {
 	servicesProvider *serviceProvider
 	grpcServer       *grpc.Server
+	grpcConn         *grpc.ClientConn
+	accessClient     accessV1.AccessV1Client
 }
 
 func NewApp(ctx context.Context) (*App, error) {
@@ -31,17 +39,42 @@ func NewApp(ctx context.Context) (*App, error) {
 
 func (a *App) Run() error {
 	defer func() {
+		a.grpcConn.Close() // close grpc connection
 		closer.CloseAll()
 		closer.Wait()
 	}()
 
-	return a.runGRPCServer()
+	wg := &sync.WaitGroup{}
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+
+		err := a.runGRPCServer()
+		if err != nil {
+			log.Fatalf("failed to start grpc server: %v", err)
+		}
+	}()
+
+	go func() {
+		//go tool pprof -http=:8081 http://localhost:6060/debug/pprof/heap - посмотреть память в ui
+		log.Println("Starting pprof server on  http://localhost:6060/debug/pprof/")
+		if err := http.ListenAndServe("localhost:6060", nil); err != nil {
+			log.Fatalf("pprof server failed: %v", err)
+		}
+	}()
+
+	wg.Wait()
+
+	return nil
 }
 
 func (a *App) initDeps(ctx context.Context) error {
 	inits := []func(context.Context) error{
 		a.initConfig,
 		a.initServiceProvider,
+		a.initClientConfig,
+		a.initGRPCClient,
 		a.initGRPCServer,
 	}
 
@@ -76,8 +109,16 @@ func (a *App) initServiceProvider(_ context.Context) error {
 	return nil
 }
 
+func (a *App) initClientConfig(_ context.Context) error {
+	a.servicesProvider.ClientConfig()
+	return nil
+}
+
 func (a *App) initGRPCServer(ctx context.Context) error {
-	a.grpcServer = grpc.NewServer(grpc.Creds(insecure.NewCredentials()))
+	a.grpcServer = grpc.NewServer(
+		grpc.Creds(insecure.NewCredentials()),
+		grpc.UnaryInterceptor(interceptor.AuthInterceptor(a.accessClient)),
+	)
 
 	reflection.Register(a.grpcServer)
 	desc.RegisterChatServerV1Server(a.grpcServer, a.servicesProvider.GetChatServerImpl(ctx))
@@ -86,6 +127,10 @@ func (a *App) initGRPCServer(ctx context.Context) error {
 }
 
 func (a *App) runGRPCServer() error {
+	if a.accessClient == nil {
+		return fmt.Errorf("gRPC client is not initialized")
+	}
+
 	log.Printf("Starting gRPC server on port: %s", a.servicesProvider.GRPCConfig().Address())
 
 	list, err := net.Listen("tcp", a.servicesProvider.GRPCConfig().Address())
@@ -98,5 +143,20 @@ func (a *App) runGRPCServer() error {
 		return err
 	}
 
+	return nil
+}
+
+func (a *App) initGRPCClient(_ context.Context) error {
+	var err error
+	a.grpcConn, err = grpc.Dial(
+		a.servicesProvider.clientConfig.Address(),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithBlock(),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to connect to server: %v", err)
+	}
+
+	a.accessClient = accessV1.NewAccessV1Client(a.grpcConn)
 	return nil
 }

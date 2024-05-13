@@ -17,8 +17,9 @@ import (
 )
 
 type serviceProvider struct {
-	pgConfig   config.PGConfig
-	grpcConfig config.GRPCConfig
+	pgConfig     config.PGConfig
+	grpcConfig   config.GRPCConfig
+	clientConfig config.ClientConfig
 
 	dbClient             db.Client
 	txManger             db.TxManager
@@ -57,6 +58,19 @@ func (s *serviceProvider) GRPCConfig() config.GRPCConfig {
 	}
 
 	return s.grpcConfig
+}
+
+func (s *serviceProvider) ClientConfig() config.ClientConfig {
+	if s.clientConfig == nil {
+		cfg, err := env.NewClientConfig()
+		if err != nil {
+			log.Fatalf("failed to get client config: %v", err)
+		}
+
+		s.clientConfig = cfg
+	}
+
+	return s.clientConfig
 }
 
 func (s *serviceProvider) GetDBClient(ctx context.Context) db.Client {
