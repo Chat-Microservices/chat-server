@@ -23,17 +23,17 @@ services:
     networks:
       - chat-server-network
 
-#  chat-server:
-#    container_name: chat-server
-#    build:
-#      context: .
-#      dockerfile: Dockerfile
-#    command: [ "./entrypoint.sh" ]
-#    volumes:
-#      - ${BASE_DIR}.env:/root/.env
-#    depends_on:
-#      - pg-chat-server
-#    networks:
-#      - chat-server-network
-#    ports:
-#      - "${GRPC_PORT_EXTERNAL}:${GRPC_PORT}"
+  chat-server:
+    container_name: chat-server
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: [ "./entrypoint.sh" ]
+    volumes:
+      - ${BASE_DIR}.env:/root/.env
+    depends_on:
+      - pg-chat-server
+    networks:
+      - chat-server-network
+    ports:
+      - "${GRPC_PORT_EXTERNAL}:${GRPC_PORT}"

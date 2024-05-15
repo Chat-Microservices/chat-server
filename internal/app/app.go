@@ -10,6 +10,7 @@ import (
 	accessV1 "github.com/semho/chat-microservices/chat-server/pkg/access_v1"
 	desc "github.com/semho/chat-microservices/chat-server/pkg/chat-server_v1"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
 	"log"
@@ -17,6 +18,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"sync"
+	"time"
 )
 
 type App struct {
@@ -148,10 +150,19 @@ func (a *App) runGRPCServer() error {
 
 func (a *App) initGRPCClient(_ context.Context) error {
 	var err error
+
+	backoffConfig := backoff.Config{
+		BaseDelay:  1 * time.Second,
+		Multiplier: 1.6,
+		Jitter:     0.2,
+		MaxDelay:   15 * time.Second,
+	}
+
 	a.grpcConn, err = grpc.Dial(
 		a.servicesProvider.clientConfig.Address(),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
+		grpc.WithConnectParams(grpc.ConnectParams{Backoff: backoffConfig, MinConnectTimeout: 10 * time.Second}),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to connect to server: %v", err)
