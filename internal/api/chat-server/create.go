@@ -3,17 +3,21 @@ package chatServerAPI
 import (
 	"context"
 	"github.com/semho/chat-microservices/chat-server/internal/converter"
+	"github.com/semho/chat-microservices/chat-server/internal/logger"
 	desc "github.com/semho/chat-microservices/chat-server/pkg/chat-server_v1"
+	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"log"
 )
 
-func (i *Implementation) CreateChat(ctx context.Context, req *desc.CreateChatRequest) (*desc.CreateChatResponse, error) {
+func (i *Implementation) CreateChat(ctx context.Context, req *desc.CreateChatRequest) (
+	*desc.CreateChatResponse,
+	error,
+) {
 	if req.GetUsernames() == nil {
 		return nil, status.Error(codes.InvalidArgument, "Invalid request: UserNames must be provided")
 	}
-	log.Printf("User names: %+v", req.GetUsernames())
+	logger.Info("Creating chat with names: ", zap.Any("usernames", req.GetUsernames()))
 
 	chatID, err := i.chatServerService.CreateChat(ctx, converter.ToUserModelFromUserApi(req.GetUsernames()))
 	if err != nil {
@@ -23,7 +27,7 @@ func (i *Implementation) CreateChat(ctx context.Context, req *desc.CreateChatReq
 		Id:        chatID,
 		Usernames: req.GetUsernames(),
 	}
-	log.Printf("New chat: %+v", newChat)
+	logger.Info("New chat: ", zap.Any("chat", newChat))
 
 	return &desc.CreateChatResponse{
 		Id: newChat.Id,

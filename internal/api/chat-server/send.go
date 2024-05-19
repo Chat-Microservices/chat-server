@@ -3,11 +3,12 @@ package chatServerAPI
 import (
 	"context"
 	"github.com/semho/chat-microservices/chat-server/internal/converter"
+	"github.com/semho/chat-microservices/chat-server/internal/logger"
 	desc "github.com/semho/chat-microservices/chat-server/pkg/chat-server_v1"
+	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
-	"log"
 )
 
 func (i *Implementation) SendMessage(ctx context.Context, req *desc.SendMessageRequest) (*emptypb.Empty, error) {
@@ -29,7 +30,7 @@ func (i *Implementation) SendMessage(ctx context.Context, req *desc.SendMessageR
 		Text: req.GetText(),
 	}
 
-	log.Printf("New message: %+v", newMessage)
+	logger.Info("New message: ", zap.Any("message", newMessage))
 
 	return &emptypb.Empty{}, nil
 }
