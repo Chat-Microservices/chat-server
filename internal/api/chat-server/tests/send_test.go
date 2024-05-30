@@ -143,6 +143,7 @@ func TestImplementation_SendMessage(t *testing.T) {
 			},
 		},
 	}
+	initLogger()
 	for _, tt := range tests {
 		tt := tt
 		t.Run(

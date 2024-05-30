@@ -6,6 +6,7 @@ import (
 	"github.com/brianvoe/gofakeit"
 	"github.com/gojuno/minimock/v3"
 	"github.com/semho/chat-microservices/chat-server/internal/client/db"
+	"github.com/semho/chat-microservices/chat-server/internal/client/rpc"
 	"github.com/semho/chat-microservices/chat-server/internal/model"
 	"github.com/semho/chat-microservices/chat-server/internal/repository"
 	repoMocks "github.com/semho/chat-microservices/chat-server/internal/repository/mocks"
@@ -21,6 +22,9 @@ func Test_serv_GetListLogs(t *testing.T) {
 
 	txManagerMock := func() db.TxManager {
 		return &mockTxManager{}
+	}
+	authServiceClientMock := func() rpc.AuthServiceClient {
+		return &mockAuthServiceClient{}
 	}
 	type args struct {
 		ctx        context.Context
@@ -92,7 +96,7 @@ func Test_serv_GetListLogs(t *testing.T) {
 				t.Parallel()
 				chatServerRepoMock := tt.chatServerRepositoryMock(mc)
 
-				service := chatServerService.NewService(chatServerRepoMock, txManagerMock())
+				service := chatServerService.NewService(chatServerRepoMock, txManagerMock(), authServiceClientMock())
 
 				resHandler, err := service.GetListLogs(tt.args.ctx, tt.args.pageNumber, tt.args.pageSize)
 
