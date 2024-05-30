@@ -5,10 +5,13 @@ import (
 	"flag"
 	"fmt"
 	grpcMiddleware "github.com/grpc-ecosystem/go-grpc-middleware"
+	"github.com/grpc-ecosystem/grpc-opentracing/go/otgrpc"
+	"github.com/opentracing/opentracing-go"
 	"github.com/semho/chat-microservices/chat-server/internal/closer"
 	"github.com/semho/chat-microservices/chat-server/internal/config"
 	"github.com/semho/chat-microservices/chat-server/internal/interceptor"
 	"github.com/semho/chat-microservices/chat-server/internal/logger"
+	"github.com/semho/chat-microservices/chat-server/internal/tracing"
 	accessV1 "github.com/semho/chat-microservices/chat-server/pkg/access_v1"
 	desc "github.com/semho/chat-microservices/chat-server/pkg/chat-server_v1"
 	"google.golang.org/grpc"
@@ -32,7 +35,6 @@ type App struct {
 
 func NewApp(ctx context.Context) (*App, error) {
 	a := &App{}
-
 	err := a.initDeps(ctx)
 	if err != nil {
 		return nil, err
@@ -117,6 +119,7 @@ func (a *App) InitLogger(_ context.Context) error {
 	if err != nil {
 		return err
 	}
+	tracing.Init(logger.Logger(), "ChatService")
 
 	return nil
 }
@@ -137,6 +140,7 @@ func (a *App) initGRPCServer(ctx context.Context) error {
 		grpc.UnaryInterceptor(
 			grpcMiddleware.ChainUnaryServer(
 				interceptor.AuthInterceptor(a.accessClient),
+				interceptor.ServerTracingInterceptor,
 				interceptor.LogInterceptor,
 			),
 		),
@@ -183,6 +187,7 @@ func (a *App) initGRPCClient(_ context.Context) error {
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 		grpc.WithConnectParams(grpc.ConnectParams{Backoff: backoffConfig, MinConnectTimeout: 10 * time.Second}),
+		grpc.WithUnaryInterceptor(otgrpc.OpenTracingClientInterceptor(opentracing.GlobalTracer())),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to connect to server: %v", err)

@@ -22,6 +22,10 @@ func InitDefault(logLevel string) error {
 	return nil
 }
 
+func Logger() *zap.Logger {
+	return globalLogger
+}
+
 func Debug(msg string, fields ...zap.Field) {
 	globalLogger.Debug(msg, fields...)
 }
