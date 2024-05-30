@@ -4,9 +4,14 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	grpcMiddleware "github.com/grpc-ecosystem/go-grpc-middleware"
+	"github.com/grpc-ecosystem/grpc-opentracing/go/otgrpc"
+	"github.com/opentracing/opentracing-go"
 	"github.com/semho/chat-microservices/chat-server/internal/closer"
 	"github.com/semho/chat-microservices/chat-server/internal/config"
 	"github.com/semho/chat-microservices/chat-server/internal/interceptor"
+	"github.com/semho/chat-microservices/chat-server/internal/logger"
+	"github.com/semho/chat-microservices/chat-server/internal/tracing"
 	accessV1 "github.com/semho/chat-microservices/chat-server/pkg/access_v1"
 	desc "github.com/semho/chat-microservices/chat-server/pkg/chat-server_v1"
 	"google.golang.org/grpc"
@@ -30,7 +35,6 @@ type App struct {
 
 func NewApp(ctx context.Context) (*App, error) {
 	a := &App{}
-
 	err := a.initDeps(ctx)
 	if err != nil {
 		return nil, err
@@ -75,6 +79,8 @@ func (a *App) initDeps(ctx context.Context) error {
 	inits := []func(context.Context) error{
 		a.initConfig,
 		a.initServiceProvider,
+		a.initJaegerConfig,
+		a.InitLogger,
 		a.initClientConfig,
 		a.initGRPCClient,
 		a.initGRPCServer,
@@ -91,9 +97,11 @@ func (a *App) initDeps(ctx context.Context) error {
 }
 
 var configPath string
+var logLevel string
 
 func init() {
 	flag.StringVar(&configPath, "config-path", ".env", "path to config file")
+	flag.StringVar(&logLevel, "l", "info", "log level")
 }
 
 func (a *App) initConfig(_ context.Context) error {
@@ -102,6 +110,22 @@ func (a *App) initConfig(_ context.Context) error {
 	if err != nil {
 		return err
 	}
+
+	return nil
+}
+
+func (a *App) initJaegerConfig(_ context.Context) error {
+	a.servicesProvider.JaegerConfig()
+	return nil
+}
+
+func (a *App) InitLogger(_ context.Context) error {
+	flag.Parse()
+	err := logger.InitDefault(logLevel)
+	if err != nil {
+		return err
+	}
+	tracing.Init(logger.Logger(), "ChatService", a.servicesProvider.jaegerConfig.Address())
 
 	return nil
 }
@@ -119,7 +143,13 @@ func (a *App) initClientConfig(_ context.Context) error {
 func (a *App) initGRPCServer(ctx context.Context) error {
 	a.grpcServer = grpc.NewServer(
 		grpc.Creds(insecure.NewCredentials()),
-		grpc.UnaryInterceptor(interceptor.AuthInterceptor(a.accessClient)),
+		grpc.UnaryInterceptor(
+			grpcMiddleware.ChainUnaryServer(
+				interceptor.AuthInterceptor(a.accessClient),
+				interceptor.ServerTracingInterceptor,
+				interceptor.LogInterceptor,
+			),
+		),
 	)
 
 	reflection.Register(a.grpcServer)
@@ -163,6 +193,7 @@ func (a *App) initGRPCClient(_ context.Context) error {
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 		grpc.WithConnectParams(grpc.ConnectParams{Backoff: backoffConfig, MinConnectTimeout: 10 * time.Second}),
+		grpc.WithUnaryInterceptor(otgrpc.OpenTracingClientInterceptor(opentracing.GlobalTracer())),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to connect to server: %v", err)

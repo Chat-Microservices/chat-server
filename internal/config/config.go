@@ -24,3 +24,7 @@ type PGConfig interface {
 type ClientConfig interface {
 	Address() string
 }
+
+type JaegerConfig interface {
+	Address() string
+}
