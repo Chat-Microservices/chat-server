@@ -38,6 +38,8 @@ services:
     ports:
       - "${GRPC_PORT_EXTERNAL}:${GRPC_PORT}"
 
+  #TODO: для ограничения доступа к интерфейсу нужно будет использовать обратный прокси HAProxy, NGINX, Keycloak.
+  #TODO: из коробки этого в джагере нет
   jaeger:
     container_name: jaeger
     image: jaegertracing/all-in-one:1.48
@@ -49,6 +51,6 @@ services:
       - "16686:16686" #web
       - "14268:14268"
       - "9411:9411"
-#    networks:
-#      - chat-server-network
-    network_mode: host
+    networks:
+      - chat-server-network
+#    network_mode: host - для локальной без docker

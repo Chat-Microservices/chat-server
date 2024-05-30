@@ -78,8 +78,9 @@ func (a *App) Run() error {
 func (a *App) initDeps(ctx context.Context) error {
 	inits := []func(context.Context) error{
 		a.initConfig,
-		a.InitLogger,
 		a.initServiceProvider,
+		a.initJaegerConfig,
+		a.InitLogger,
 		a.initClientConfig,
 		a.initGRPCClient,
 		a.initGRPCServer,
@@ -113,13 +114,18 @@ func (a *App) initConfig(_ context.Context) error {
 	return nil
 }
 
+func (a *App) initJaegerConfig(_ context.Context) error {
+	a.servicesProvider.JaegerConfig()
+	return nil
+}
+
 func (a *App) InitLogger(_ context.Context) error {
 	flag.Parse()
 	err := logger.InitDefault(logLevel)
 	if err != nil {
 		return err
 	}
-	tracing.Init(logger.Logger(), "ChatService")
+	tracing.Init(logger.Logger(), "ChatService", a.servicesProvider.jaegerConfig.Address())
 
 	return nil
 }

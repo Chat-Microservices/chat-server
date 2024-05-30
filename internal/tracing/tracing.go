@@ -5,15 +5,14 @@ import (
 	"go.uber.org/zap"
 )
 
-func Init(logger *zap.Logger, serviceName string) {
+func Init(logger *zap.Logger, serviceName, address string) {
 	cfg := config.Configuration{
 		Sampler: &config.SamplerConfig{
 			Type:  "const",
 			Param: 1,
 		},
 		Reporter: &config.ReporterConfig{
-			LocalAgentHostPort: "localhost:6831",
-			//LocalAgentHostPort: "jaeger:6831",
+			LocalAgentHostPort: address,
 		},
 	}
 
