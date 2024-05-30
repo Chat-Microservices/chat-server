@@ -7,6 +7,7 @@ import (
 	"github.com/brianvoe/gofakeit"
 	"github.com/gojuno/minimock/v3"
 	"github.com/semho/chat-microservices/chat-server/internal/client/db"
+	"github.com/semho/chat-microservices/chat-server/internal/client/rpc"
 	"github.com/semho/chat-microservices/chat-server/internal/model"
 	"github.com/semho/chat-microservices/chat-server/internal/repository"
 	repoMocks "github.com/semho/chat-microservices/chat-server/internal/repository/mocks"
@@ -22,7 +23,9 @@ func Test_serv_DeleteChat(t *testing.T) {
 	txManagerMock := func() db.TxManager {
 		return &mockTxManager{}
 	}
-
+	authServiceClientMock := func() rpc.AuthServiceClient {
+		return &mockAuthServiceClient{}
+	}
 	type args struct {
 		ctx    context.Context
 		chatId int64
@@ -225,7 +228,7 @@ func Test_serv_DeleteChat(t *testing.T) {
 				t.Parallel()
 				chatServerRepoMock := tt.chatServerRepositoryMock(mc)
 
-				service := chatServerService.NewService(chatServerRepoMock, txManagerMock())
+				service := chatServerService.NewService(chatServerRepoMock, txManagerMock(), authServiceClientMock())
 
 				err := service.DeleteChat(tt.args.ctx, tt.args.chatId)
 

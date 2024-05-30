@@ -7,6 +7,7 @@ import (
 	"github.com/brianvoe/gofakeit"
 	"github.com/gojuno/minimock/v3"
 	"github.com/semho/chat-microservices/chat-server/internal/client/db"
+	"github.com/semho/chat-microservices/chat-server/internal/client/rpc"
 	"github.com/semho/chat-microservices/chat-server/internal/model"
 	"github.com/semho/chat-microservices/chat-server/internal/repository"
 	repoMocks "github.com/semho/chat-microservices/chat-server/internal/repository/mocks"
@@ -22,6 +23,9 @@ func Test_serv_SendMessage(t *testing.T) {
 
 	txManagerMock := func() db.TxManager {
 		return &mockTxManager{}
+	}
+	authServiceClientMock := func() rpc.AuthServiceClient {
+		return &mockAuthServiceClient{}
 	}
 	type args struct {
 		ctx     context.Context
@@ -70,13 +74,13 @@ func Test_serv_SendMessage(t *testing.T) {
 			err: nil,
 			chatServerRepositoryMock: func(mc *minimock.Controller) repository.ChatServerRepository {
 				mock := repoMocks.NewChatServerRepositoryMock(mc)
-				mock.ChatExistsMock.Expect(ctx, message.ChatID).Return(true, nil)
+				mock.ChatExistsMock.Expect(minimock.AnyContext, message.ChatID).Return(true, nil)
 
-				mock.GetUserIDByNameMock.Expect(ctx, message.UserName).Return(chatId, query, nil)
-				mock.CreateLogMock.Expect(ctx, log).Return(nil)
+				mock.GetUserIDByNameMock.Expect(minimock.AnyContext, message.UserName).Return(chatId, query, nil)
+				mock.CreateLogMock.Expect(minimock.AnyContext, log).Return(nil)
 
-				mock.SendMessageMock.Expect(ctx, message, chatId).Return(query, nil)
-				mock.CreateLogMock.Expect(ctx, log).Return(nil)
+				mock.SendMessageMock.Expect(minimock.AnyContext, message, chatId).Return(query, nil)
+				mock.CreateLogMock.Expect(minimock.AnyContext, log).Return(nil)
 
 				return mock
 			},
@@ -90,7 +94,7 @@ func Test_serv_SendMessage(t *testing.T) {
 			err: repoErr,
 			chatServerRepositoryMock: func(mc *minimock.Controller) repository.ChatServerRepository {
 				mock := repoMocks.NewChatServerRepositoryMock(mc)
-				mock.ChatExistsMock.Expect(ctx, chatId).Return(true, repoErr)
+				mock.ChatExistsMock.Expect(minimock.AnyContext, chatId).Return(true, repoErr)
 
 				return mock
 			},
@@ -104,7 +108,7 @@ func Test_serv_SendMessage(t *testing.T) {
 			err: errors.New("chat does not exist"),
 			chatServerRepositoryMock: func(mc *minimock.Controller) repository.ChatServerRepository {
 				mock := repoMocks.NewChatServerRepositoryMock(mc)
-				mock.ChatExistsMock.Expect(ctx, chatId).Return(false, nil)
+				mock.ChatExistsMock.Expect(minimock.AnyContext, chatId).Return(false, nil)
 
 				return mock
 			},
@@ -118,9 +122,9 @@ func Test_serv_SendMessage(t *testing.T) {
 			err: repoErr,
 			chatServerRepositoryMock: func(mc *minimock.Controller) repository.ChatServerRepository {
 				mock := repoMocks.NewChatServerRepositoryMock(mc)
-				mock.ChatExistsMock.Expect(ctx, chatId).Return(true, nil)
+				mock.ChatExistsMock.Expect(minimock.AnyContext, chatId).Return(true, nil)
 
-				mock.GetUserIDByNameMock.Expect(ctx, message.UserName).Return(0, query, repoErr)
+				mock.GetUserIDByNameMock.Expect(minimock.AnyContext, message.UserName).Return(0, query, repoErr)
 				return mock
 			},
 		},
@@ -133,12 +137,12 @@ func Test_serv_SendMessage(t *testing.T) {
 			err: repoErr,
 			chatServerRepositoryMock: func(mc *minimock.Controller) repository.ChatServerRepository {
 				mock := repoMocks.NewChatServerRepositoryMock(mc)
-				mock.ChatExistsMock.Expect(ctx, chatId).Return(true, nil)
+				mock.ChatExistsMock.Expect(minimock.AnyContext, chatId).Return(true, nil)
 
-				mock.GetUserIDByNameMock.Expect(ctx, message.UserName).Return(chatId, query, nil)
-				mock.CreateLogMock.Expect(ctx, log).Return(nil)
+				mock.GetUserIDByNameMock.Expect(minimock.AnyContext, message.UserName).Return(chatId, query, nil)
+				mock.CreateLogMock.Expect(minimock.AnyContext, log).Return(nil)
 
-				mock.SendMessageMock.Expect(ctx, message, chatId).Return(query, repoErr)
+				mock.SendMessageMock.Expect(minimock.AnyContext, message, chatId).Return(query, repoErr)
 				return mock
 			},
 		},
@@ -151,10 +155,10 @@ func Test_serv_SendMessage(t *testing.T) {
 			err: repoErrLog,
 			chatServerRepositoryMock: func(mc *minimock.Controller) repository.ChatServerRepository {
 				mock := repoMocks.NewChatServerRepositoryMock(mc)
-				mock.ChatExistsMock.Expect(ctx, chatId).Return(true, nil)
+				mock.ChatExistsMock.Expect(minimock.AnyContext, chatId).Return(true, nil)
 
-				mock.GetUserIDByNameMock.Expect(ctx, message.UserName).Return(chatId, query, nil)
-				mock.CreateLogMock.Expect(ctx, log).Return(repoErrLog)
+				mock.GetUserIDByNameMock.Expect(minimock.AnyContext, message.UserName).Return(chatId, query, nil)
+				mock.CreateLogMock.Expect(minimock.AnyContext, log).Return(repoErrLog)
 				return mock
 			},
 		},
@@ -185,7 +189,7 @@ func Test_serv_SendMessage(t *testing.T) {
 				t.Parallel()
 				chatServerRepoMock := tt.chatServerRepositoryMock(mc)
 
-				service := chatServerService.NewService(chatServerRepoMock, txManagerMock())
+				service := chatServerService.NewService(chatServerRepoMock, txManagerMock(), authServiceClientMock())
 
 				err := service.SendMessage(tt.args.ctx, tt.args.message)
 
